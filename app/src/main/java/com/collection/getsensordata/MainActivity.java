@@ -51,8 +51,6 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         buttonStart = (Button) findViewById(R.id.buttonStart);
         buttonStop = (Button) findViewById(R.id.buttonStop);
         String current_path = getExternalFilesDir(null).getAbsolutePath();
-
-
         /*
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
                 && ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
@@ -131,12 +129,12 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     @Override
     public void onResume(){
         super.onResume();
-            try {
+        try {
 
-                writer = new FileWriter(new File(getExternalFilesDir(null).getAbsolutePath(), getFilename()), true);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+            writer = new FileWriter(new File(getExternalFilesDir(null).getAbsolutePath(), getFilename()), true);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
     public String getFilename() {
