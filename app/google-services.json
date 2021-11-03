@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "301707117663",
+    "project_id": "sensordata-80073",
+    "storage_bucket": "sensordata-80073.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:301707117663:android:713ba38b9e2f1bc74f87ea",
+        "android_client_info": {
+          "package_name": "com.collection.getsensordata"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "301707117663-sh9shm0rehsbnpflgdv40861n5lfgjlc.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDfeSRcIllnO8_uYEVFOMyX7XN_SZYb1mo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "301707117663-sh9shm0rehsbnpflgdv40861n5lfgjlc.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

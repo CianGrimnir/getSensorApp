@@ -19,6 +19,10 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
+
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
+
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -37,8 +41,17 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     FileWriter writer;
     private TextView mTextView;
     private List list;
+    DatabaseReference rootRef = FirebaseDatabase.getInstance().getReference();
+    DatabaseReference sensorRef = rootRef.child("sensor_data");
+    DatabaseReference openDataRef = rootRef.child("open_data");
 
-    // try with commenting suppress lint
+    /**
+     * Called when the activity is starting. This is where most initialization should go
+     *
+     * @param savedState -  Bundle object that is passed into the onCreate method of every Android
+     *                   Activity, contains the most recent data , specially the data which was used
+     *                   previously in the activity.
+     */
     @SuppressLint("ClickableViewAccessibility")
     @Override
     protected void onCreate(Bundle savedState) {
@@ -50,13 +63,10 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         list = sensorManager.getSensorList(Sensor.TYPE_ACCELEROMETER);
         buttonStart = (Button) findViewById(R.id.buttonStart);
         buttonStop = (Button) findViewById(R.id.buttonStop);
-        String current_path = getExternalFilesDir(null).getAbsolutePath();
-        /*
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
-                && ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE},
-                    1);
-        }
+        //String current_path = getExternalFilesDir(null).getAbsolutePath();
+
+        /**
+         * This callback will be invoked when a start button is dispatched.
          */
         buttonStart.setOnTouchListener(new View.OnTouchListener() {
             @Override
@@ -64,24 +74,21 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 buttonStart.setEnabled(false);
                 buttonStop.setEnabled(true);
                 list = sensorManager.getSensorList(Sensor.TYPE_ACCELEROMETER);
-                // File root = android.os.Environment.getExternalStorageDirectory();
-                // String current_path = root.getAbsolutePath() + "/sensorData";
-
+                /*
                 File directory = new File(current_path);
-
                 if (! directory.exists()){
 
                     directory.mkdir();
                 }
-                //Log.d("sensorData","testing path - " + test_path);
                 Log.d("sensorData", "writing to - " + current_path);
                 try {
-                    //writer = new FileWriter(new File(current_path, "sensor_" + System.currentTimeMillis() + ".csv"));
                     writer = new FileWriter(new File(current_path, getFilename()));
                 } catch (IOException e) {
-                    Log.d("sensorData","inside onTouch catch method");
+                    Log.d("sensorData","Exemption raised while creating a writer.");
                     e.printStackTrace();
                 }
+                */
+
                 if (list.size() > 0) {
                     mSensor = (Sensor) list.get(0);
                     sensorManager.registerListener(MainActivity.this, mSensor, SensorManager.SENSOR_DELAY_NORMAL);
@@ -92,6 +99,9 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 return true;
             }
         });
+        /**
+         * This callback will be invoked when a stop button is dispatched.
+         */
         buttonStop.setOnTouchListener(new View.OnTouchListener() {
             @Override
             public boolean onTouch(View v, MotionEvent event) {
@@ -100,48 +110,66 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 isRunning = false;
                 sensorManager.flush(MainActivity.this);
                 sensorManager.unregisterListener(MainActivity.this);
+                /*
                 try{
                     writer.close();
                 } catch (IOException e) {
-                    Log.d("sensorData","inside setonTouchListener");
+                    Log.d("sensorData","Exemption raised while closing the writer.");
                     e.printStackTrace();
-                }
+                }*/
                 return true;
             }
         });
     }
 
+    /**
+     * Called when there is a new sensor event.
+     *
+     * @param event SensorEvent =  holds information such as the sensor's type,
+     *              the time-stamp, accuracy and of course the sensor's data.
+     */
     @SuppressLint({"SetTextI18n", "DefaultLocale"})
     @Override
-    public void onSensorChanged(SensorEvent event){
-        if(isRunning){
+    public void onSensorChanged(SensorEvent event) {
+        if (isRunning) {
             try {
-                //Log.d("sensorData", String.valueOf("value is " + event.values[2] +":"+ event.values[1] + ":"+event.values[0]));
-                mTextView.setText("x: " + event.values[0] + "\ny: " + event.values[1] + "\nz: " + event.values[2]);
-                writer.write(String.format("%d, %f, %f, %f\n", event.timestamp, event.values[0], event.values[1], event.values[2]));
-            } catch (IOException e) {
-                Log.d("sensorData","inside onSensorChanged");
+                long timestamp = event.timestamp;
+                float xvalue = event.values[0];
+                float yvalue = event.values[1];
+                float zvalue = event.values[2];
+                DataStorageClass storeData = new DataStorageClass(timestamp, xvalue, yvalue, zvalue);
+                mTextView.setText("x: " + xvalue + "\ny: " + yvalue + "\nz: " + zvalue);
+                sensorRef.child(String.valueOf(timestamp)).setValue(storeData);
+                //writer.write(String.format("%d, %f, %f, %f\n", timestamp, xvalue, yvalue, zvalue));
+            } catch (Exception e) {
+                Log.d("sensorData", "Exemption raised while writing to a firebase.");
                 e.printStackTrace();
             }
         }
     }
 
-    @Override
-    public void onResume(){
-        super.onResume();
-        try {
+    /** Called when the activity will start interacting with the user.
+     @Override public void onResume(){
+     super.onResume();
+     try {
+     writer = new FileWriter(new File(getExternalFilesDir(null).getAbsolutePath(), getFilename()), true);
+     } catch (IOException e) {
+     e.printStackTrace();
+     }
+     }
+     */
 
-            writer = new FileWriter(new File(getExternalFilesDir(null).getAbsolutePath(), getFilename()), true);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-
-    public String getFilename() {
-        SimpleDateFormat formatter = new SimpleDateFormat("yyyy_MM_dd", Locale.US);
-        Date now = new Date();
-        return "sensor_" + formatter.format(now) + ".csv";
-    }
+    /**
+     * Returns filename for the csv after formatting with date.
+     * <p>
+     * return String - csv filename.
+     * <p>
+     * public String getFilename() {
+     * SimpleDateFormat formatter = new SimpleDateFormat("yyyy_MM_dd", Locale.US);
+     * Date now = new Date();
+     * return "sensor_" + formatter.format(now) + ".csv";
+     * }
+     */
     @Override
     public void onAccuracyChanged(Sensor sensor, int accuracy) {
 

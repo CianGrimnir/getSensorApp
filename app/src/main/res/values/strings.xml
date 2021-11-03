@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">GetSensorData</string>
+    <string name="welcome_to_sensor_data_collection">Welcome to Sensor Data Collection</string>
 </resources>
