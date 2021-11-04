@@ -133,7 +133,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 float xvalue = event.values[0];
                 float yvalue = event.values[1];
                 float zvalue = event.values[2];
-                DataStorageClass storeData = new DataStorageClass(timestamp, xvalue, yvalue, zvalue);
+                DataStorageClass storeData = new DataStorageClass(epochTimeStamp, xvalue, yvalue, zvalue);
                 mTextView.setText("x: " + xvalue + "\ny: " + yvalue + "\nz: " + zvalue);
                 if (currTime - lastAccCheck > ACC_CHECK_INTERVAL) {
                     sensorRef.child(String.valueOf(epochTimeStamp)).setValue(storeData);
