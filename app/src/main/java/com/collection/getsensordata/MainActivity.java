@@ -234,9 +234,9 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         }
 
         /**
-         * Get air quality readings for each sensor device.
+         * Get air temperature readings for each sensor device.
          *
-         * @param readingArray - JsonArray data for air quality of each sensors.
+         * @param readingArray - JsonArray data for air temperature of each sensors.
          * @return - Map of each readings of a sensors.
          */
         private Map<String, Float> getReadings(JSONArray readingArray) {
