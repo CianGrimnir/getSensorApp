@@ -3,7 +3,7 @@ package com.collection.getsensordata;
 public class ApiDataStorageClass {
 
     long timestamp;
-    String device_id, areaName;
+    String device_id, area_name;
     float latitude, longitude;
 
     // To avoid error for firebase - create empty constructor.
@@ -13,7 +13,7 @@ public class ApiDataStorageClass {
     public ApiDataStorageClass(long timestamp, String device_id, String areaName, float latitude, float longitude) {
         this.timestamp = timestamp;
         this.device_id = device_id;
-        this.areaName = areaName;
+        this.area_name = areaName;
         this.latitude = latitude;
         this.longitude = longitude;
     }
@@ -34,12 +34,12 @@ public class ApiDataStorageClass {
         this.device_id = device_id;
     }
 
-    public String getAreaName() {
-        return areaName;
+    public String getArea_name() {
+        return area_name;
     }
 
-    public void setAreaName(String areaName) {
-        this.areaName = areaName;
+    public void setArea_name(String area_name) {
+        this.area_name = area_name;
     }
 
     public float getLatitude() {

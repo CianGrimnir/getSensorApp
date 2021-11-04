@@ -73,7 +73,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     @Override
     protected void onCreate(Bundle savedState) {
         isRunning = false;
-        lastAccCheck = System.currentTimeMillis();
+        lastAccCheck = 0;
         super.onCreate(savedState);
         setContentView(R.layout.activity_main);
         mTextView = (TextView) findViewById(R.id.textView);

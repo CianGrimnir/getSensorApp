@@ -3,7 +3,7 @@ package com.collection.getsensordata;
 public class DataStorageClass {
 
     long timestamp;
-    float valueX, valueY, valueZ;
+    float x, y, z;
 
     // To avoid error for firebase - create empty constructor.
     public DataStorageClass() {
@@ -11,9 +11,9 @@ public class DataStorageClass {
 
     public DataStorageClass(long timestamp, float valueX, float valueY, float valueZ) {
         this.timestamp = timestamp;
-        this.valueX = valueX;
-        this.valueY = valueY;
-        this.valueZ = valueZ;
+        this.x = valueX;
+        this.y = valueY;
+        this.z = valueZ;
     }
 
     public long getTimestamp() {
@@ -24,27 +24,27 @@ public class DataStorageClass {
         this.timestamp = timestamp;
     }
 
-    public float getValueX() {
-        return valueX;
+    public float getX() {
+        return x;
     }
 
-    public void setValueX(float valueX) {
-        this.valueX = valueX;
+    public void setX(float x) {
+        this.x = x;
     }
 
-    public float getValueY() {
-        return valueY;
+    public float getY() {
+        return y;
     }
 
-    public void setValueY(float valueY) {
-        this.valueY = valueY;
+    public void setY(float y) {
+        this.y = y;
     }
 
-    public float getValueZ() {
-        return valueZ;
+    public float getZ() {
+        return z;
     }
 
-    public void setValueZ(float valueZ) {
-        this.valueZ = valueZ;
+    public void setZ(float z) {
+        this.z = z;
     }
 }
