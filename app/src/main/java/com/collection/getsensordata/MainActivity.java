@@ -15,6 +15,7 @@ import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.SystemClock;
 import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
@@ -128,14 +129,14 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         if (isRunning) {
             try {
                 long currTime = System.currentTimeMillis();
-                long timestamp = event.timestamp;
+                long epochTimeStamp = System.currentTimeMillis() + ((event.timestamp - SystemClock.elapsedRealtimeNanos()) / 1000000L);
                 float xvalue = event.values[0];
                 float yvalue = event.values[1];
                 float zvalue = event.values[2];
                 DataStorageClass storeData = new DataStorageClass(timestamp, xvalue, yvalue, zvalue);
                 mTextView.setText("x: " + xvalue + "\ny: " + yvalue + "\nz: " + zvalue);
                 if (currTime - lastAccCheck > ACC_CHECK_INTERVAL) {
-                    sensorRef.child(String.valueOf(timestamp)).setValue(storeData);
+                    sensorRef.child(String.valueOf(epochTimeStamp)).setValue(storeData);
                     lastAccCheck = currTime;
                 }
             } catch (Exception e) {
