@@ -4,6 +4,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import android.content.pm.PackageManager;
+import android.os.AsyncTask;
 import android.os.Build;
 import android.Manifest;
 import android.annotation.SuppressLint;
@@ -13,6 +14,7 @@ import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.os.Bundle;
+import android.os.Handler;
 import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
@@ -23,9 +25,19 @@ import android.widget.Toast;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.util.Date;
 import java.util.List;
 import java.text.SimpleDateFormat;
@@ -38,9 +50,13 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     Button buttonStart;
     Button buttonStop;
     boolean isRunning;
-    FileWriter writer;
     private TextView mTextView;
     private List list;
+    private final static long ACC_CHECK_INTERVAL = 100000;
+    private long lastAccCheck;
+
+    private long timestamp = 0;
+    private final static String URL = "https://api.data.gov.sg/v1/environment/air-temperature";
     DatabaseReference rootRef = FirebaseDatabase.getInstance().getReference();
     DatabaseReference sensorRef = rootRef.child("sensor_data");
     DatabaseReference openDataRef = rootRef.child("open_data");
@@ -56,6 +72,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     @Override
     protected void onCreate(Bundle savedState) {
         isRunning = false;
+        lastAccCheck = System.currentTimeMillis();
         super.onCreate(savedState);
         setContentView(R.layout.activity_main);
         mTextView = (TextView) findViewById(R.id.textView);
@@ -63,7 +80,6 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         list = sensorManager.getSensorList(Sensor.TYPE_ACCELEROMETER);
         buttonStart = (Button) findViewById(R.id.buttonStart);
         buttonStop = (Button) findViewById(R.id.buttonStop);
-        //String current_path = getExternalFilesDir(null).getAbsolutePath();
 
         /**
          * This callback will be invoked when a start button is dispatched.
@@ -74,21 +90,6 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 buttonStart.setEnabled(false);
                 buttonStop.setEnabled(true);
                 list = sensorManager.getSensorList(Sensor.TYPE_ACCELEROMETER);
-                /*
-                File directory = new File(current_path);
-                if (! directory.exists()){
-
-                    directory.mkdir();
-                }
-                Log.d("sensorData", "writing to - " + current_path);
-                try {
-                    writer = new FileWriter(new File(current_path, getFilename()));
-                } catch (IOException e) {
-                    Log.d("sensorData","Exemption raised while creating a writer.");
-                    e.printStackTrace();
-                }
-                */
-
                 if (list.size() > 0) {
                     mSensor = (Sensor) list.get(0);
                     sensorManager.registerListener(MainActivity.this, mSensor, SensorManager.SENSOR_DELAY_NORMAL);
@@ -110,13 +111,6 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 isRunning = false;
                 sensorManager.flush(MainActivity.this);
                 sensorManager.unregisterListener(MainActivity.this);
-                /*
-                try{
-                    writer.close();
-                } catch (IOException e) {
-                    Log.d("sensorData","Exemption raised while closing the writer.");
-                    e.printStackTrace();
-                }*/
                 return true;
             }
         });
@@ -133,45 +127,107 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     public void onSensorChanged(SensorEvent event) {
         if (isRunning) {
             try {
+                long currTime = System.currentTimeMillis();
                 long timestamp = event.timestamp;
                 float xvalue = event.values[0];
                 float yvalue = event.values[1];
                 float zvalue = event.values[2];
                 DataStorageClass storeData = new DataStorageClass(timestamp, xvalue, yvalue, zvalue);
                 mTextView.setText("x: " + xvalue + "\ny: " + yvalue + "\nz: " + zvalue);
-                sensorRef.child(String.valueOf(timestamp)).setValue(storeData);
-                //writer.write(String.format("%d, %f, %f, %f\n", timestamp, xvalue, yvalue, zvalue));
+                if (currTime - lastAccCheck > ACC_CHECK_INTERVAL) {
+                    sensorRef.child(String.valueOf(timestamp)).setValue(storeData);
+                    lastAccCheck = currTime;
+                }
             } catch (Exception e) {
                 Log.d("sensorData", "Exemption raised while writing to a firebase.");
                 e.printStackTrace();
             }
+            new FetchOpenDataTask().execute(URL);
         }
     }
 
-    /** Called when the activity will start interacting with the user.
-     @Override public void onResume(){
-     super.onResume();
-     try {
-     writer = new FileWriter(new File(getExternalFilesDir(null).getAbsolutePath(), getFilename()), true);
-     } catch (IOException e) {
-     e.printStackTrace();
-     }
-     }
-     */
-
-    /**
-     * Returns filename for the csv after formatting with date.
-     * <p>
-     * return String - csv filename.
-     * <p>
-     * public String getFilename() {
-     * SimpleDateFormat formatter = new SimpleDateFormat("yyyy_MM_dd", Locale.US);
-     * Date now = new Date();
-     * return "sensor_" + formatter.format(now) + ".csv";
-     * }
-     */
     @Override
     public void onAccuracyChanged(Sensor sensor, int accuracy) {
+    }
 
+    private class FetchOpenDataTask extends AsyncTask<String, Void, String> {
+
+        @Override
+        protected String doInBackground(String... params) {
+            HttpURLConnection connection = null;
+            BufferedReader reader = null;
+            InputStream inputStream = null;
+            try {
+                URL url = new URL(params[0]);
+                connection = (HttpURLConnection) url.openConnection();
+                connection.connect();
+                inputStream = connection.getInputStream();
+                reader = new BufferedReader(new InputStreamReader(inputStream));
+                StringBuilder buffer = new StringBuilder();
+                String line = "";
+                while ((line = reader.readLine()) != null) {
+                    buffer.append(line).append("\n");
+                }
+                return buffer.toString();
+            } catch (IOException e) {
+                e.printStackTrace();
+            } finally {
+                if (connection != null) {
+                    connection.disconnect();
+                }
+                try {
+                    if (reader != null) {
+                        reader.close();
+                    }
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+            return null;
+        }
+
+        @Override
+        protected void onPostExecute(String dataFetched) {
+            //parse the JSON data and then display
+            parseJSON(dataFetched);
+        }
+
+        private void parseJSON(String data) {
+            try {
+                JSONObject jsonObject = new JSONObject(data);
+                JSONObject getTimestamp = jsonObject.getJSONArray("items").getJSONObject(0);
+                long time_stamp = getEpoch(getTimestamp.getString("timestamp"));
+                if (time_stamp > timestamp) {
+                    JSONObject stations = jsonObject.getJSONObject("metadata");
+                    JSONArray stationArray = stations.getJSONArray("stations");
+                    for (int i = 0; i < stationArray.length(); i++) {
+                        JSONObject sensorData = stationArray.getJSONObject(i);
+                        String deviceId = sensorData.getString("device_id");
+                        String name = sensorData.getString("name");
+                        JSONObject location = sensorData.getJSONObject("location");
+                        float latitude = (float) location.getDouble("latitude");
+                        float longitude = (float) location.getDouble("longitude");
+                        ApiDataStorageClass apiData = new ApiDataStorageClass(time_stamp, deviceId, name, latitude, longitude);
+                        DatabaseReference areaRef = openDataRef.child(name);
+                        areaRef.child(String.valueOf(time_stamp)).setValue(apiData);
+                        timestamp = time_stamp;
+                    }
+                }
+            } catch (JSONException e) {
+                e.printStackTrace();
+            }
+        }
+
+        private long getEpoch(String timestamp) {
+            long epoch = 0;
+            SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZZZZZ");
+            try {
+                Date date = df.parse(timestamp);
+                epoch = date.getTime();
+            } catch (Exception e) {
+                Log.d("sensorData", String.valueOf(e));
+            }
+            return epoch;
+        }
     }
 }
