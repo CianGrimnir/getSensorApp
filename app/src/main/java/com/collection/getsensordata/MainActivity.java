@@ -150,6 +150,9 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     public void onAccuracyChanged(Sensor sensor, int accuracy) {
     }
 
+    /**
+     * Class to fetch data from the open api and feed it to the firebase database.
+     */
     private class FetchOpenDataTask extends AsyncTask<String, Void, String> {
 
         @Override
@@ -192,6 +195,11 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             parseJSON(dataFetched);
         }
 
+        /**
+         * parse json data fetched from the api and push the parsed data to firebase
+         *
+         * @param data - metadata from the api
+         */
         private void parseJSON(String data) {
             try {
                 JSONObject jsonObject = new JSONObject(data);
@@ -218,6 +226,12 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             }
         }
 
+        /**
+         * Convert datetime format to epoch time
+         *
+         * @param timestamp - Date - 2021-11-04T09:10:00+08:00
+         * @return converted epoch time
+         */
         private long getEpoch(String timestamp) {
             long epoch = 0;
             SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZZZZZ");
