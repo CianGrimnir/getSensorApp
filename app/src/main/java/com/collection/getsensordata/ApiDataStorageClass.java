@@ -4,18 +4,19 @@ public class ApiDataStorageClass {
 
     long timestamp;
     String device_id, area_name;
-    float latitude, longitude;
+    float latitude, longitude, reading;
 
     // To avoid error for firebase - create empty constructor.
     public ApiDataStorageClass() {
     }
 
-    public ApiDataStorageClass(long timestamp, String device_id, String areaName, float latitude, float longitude) {
+    public ApiDataStorageClass(long timestamp, String device_id, String area_name, float latitude, float longitude, float reading) {
         this.timestamp = timestamp;
         this.device_id = device_id;
-        this.area_name = areaName;
+        this.area_name = area_name;
         this.latitude = latitude;
         this.longitude = longitude;
+        this.reading = reading;
     }
 
     public long getTimestamp() {
@@ -56,5 +57,13 @@ public class ApiDataStorageClass {
 
     public void setLongitude(float longitude) {
         this.longitude = longitude;
+    }
+
+    public float getReading() {
+        return reading;
+    }
+
+    public void setReading(float reading) {
+        this.reading = reading;
     }
 }

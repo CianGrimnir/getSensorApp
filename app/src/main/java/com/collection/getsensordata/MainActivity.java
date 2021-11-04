@@ -40,9 +40,11 @@ import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
 import java.text.SimpleDateFormat;
 import java.util.Locale;
+import java.util.Map;
 
 
 public class MainActivity extends AppCompatActivity implements SensorEventListener {
@@ -209,6 +211,9 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 if (time_stamp > timestamp) {
                     JSONObject stations = jsonObject.getJSONObject("metadata");
                     JSONArray stationArray = stations.getJSONArray("stations");
+                    JSONArray readingArray = getTimestamp.getJSONArray("readings");
+                    Map<String, Float> readingMap = getReadings(readingArray);
+
                     for (int i = 0; i < stationArray.length(); i++) {
                         JSONObject sensorData = stationArray.getJSONObject(i);
                         String deviceId = sensorData.getString("device_id");
@@ -216,7 +221,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                         JSONObject location = sensorData.getJSONObject("location");
                         float latitude = (float) location.getDouble("latitude");
                         float longitude = (float) location.getDouble("longitude");
-                        ApiDataStorageClass apiData = new ApiDataStorageClass(time_stamp, deviceId, name, latitude, longitude);
+                        float reading = readingMap.get(deviceId);
+                        ApiDataStorageClass apiData = new ApiDataStorageClass(time_stamp, deviceId, name, latitude, longitude, reading);
                         DatabaseReference areaRef = openDataRef.child(name);
                         areaRef.child(String.valueOf(time_stamp)).setValue(apiData);
                         timestamp = time_stamp;
@@ -225,6 +231,29 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             } catch (JSONException e) {
                 e.printStackTrace();
             }
+        }
+
+        /**
+         * Get air quality readings for each sensor device.
+         *
+         * @param readingArray - JsonArray data for air quality of each sensors.
+         * @return - Map of each readings of a sensors.
+         */
+        private Map<String, Float> getReadings(JSONArray readingArray) {
+            Map<String, Float> readingMap = new HashMap<String, Float>();
+
+            try {
+                for (int j = 0; j < readingArray.length(); j++) {
+                    JSONObject readingData = readingArray.getJSONObject(j);
+                    Log.d("SensorData", String.valueOf(readingData));
+                    String station_id = readingData.getString("station_id");
+                    float reading = (float) readingData.getDouble("value");
+                    readingMap.put(station_id, reading);
+                }
+            } catch (JSONException e) {
+                e.printStackTrace();
+            }
+            return readingMap;
         }
 
         /**
