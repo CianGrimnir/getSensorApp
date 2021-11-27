@@ -1,12 +1,15 @@
 package com.collection.getsensordata;
 
+import static android.Manifest.permission.ACCESS_FINE_LOCATION;
+
+import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
-import androidx.core.content.ContextCompat;
+
 import android.content.pm.PackageManager;
+import android.location.Location;
 import android.os.AsyncTask;
 import android.os.Build;
-import android.Manifest;
 import android.annotation.SuppressLint;
 import android.content.Context;
 import android.hardware.Sensor;
@@ -14,8 +17,9 @@ import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.os.Bundle;
-import android.os.Handler;
 import android.os.SystemClock;
+import android.provider.Settings;
+import android.text.method.ScrollingMovementMethod;
 import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
@@ -23,6 +27,9 @@ import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.google.android.gms.location.FusedLocationProviderClient;
+import com.google.android.gms.location.LocationServices;
+import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 
@@ -31,20 +38,18 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
-import java.net.MalformedURLException;
 import java.net.URL;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.List;
 import java.text.SimpleDateFormat;
 import java.util.Locale;
-import java.util.Map;
 
 
 public class MainActivity extends AppCompatActivity implements SensorEventListener {
@@ -54,15 +59,28 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     Button buttonStop;
     boolean isRunning;
     private TextView mTextView;
+    private TextView weatherTextView;
+    private TextView aqiTextView;
+    private TextView forecastTextView;
     private List list;
     private final static long ACC_CHECK_INTERVAL = 100000;
-    private long lastAccCheck;
-
+    private long lastAccCheck, weather_last_updated, aqi_last_updated;
+    private FusedLocationProviderClient client;
+    boolean apiFlag = true;
+    private String geoWeatherURL, geoAQIURL, geoForecastURL, weatherInfo, aqiInfo;
     private long timestamp = 0;
-    private final static String URL = "https://api.data.gov.sg/v1/environment/air-temperature";
+    private final static String FORECAST_URL = "http://metwdb-openaccess.ichec.ie/metno-wdb2ts/locationforecast?lat=%s;long=%s;from=%s;to=%s";
+    private static final String WEATHER_URL = "https://api.openweathermap.org/data/2.5/weather?lat=%s&lon=%s&APPID=%s&units=metric";
+    private static final String AQ_URL = "https://api.waqi.info/feed/geo:%s;%s/?token=%s";
+    private final String aqi_token = "6723c996f2f554c12e670e1481673643c84bd21c";
+    private final String weather_token = "0dec160c060873c9131842af25ea13d5";
     DatabaseReference rootRef = FirebaseDatabase.getInstance().getReference();
-    DatabaseReference sensorRef = rootRef.child("sensor_data");
-    DatabaseReference openDataRef = rootRef.child("open_data");
+    DatabaseReference sensorRef = rootRef.child("gps_data");
+    DatabaseReference openDataRef = rootRef.child("weather_data");
+    DatabaseReference aqiDataRef = rootRef.child("aqi_data");
+    DatabaseReference forecastDataRef = rootRef.child("forecast_data");
+    String nodeRef, androidId = "";
+
 
     /**
      * Called when the activity is starting. This is where most initialization should go
@@ -77,13 +95,20 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         isRunning = false;
         lastAccCheck = 0;
         super.onCreate(savedState);
+        requestPermission();
         setContentView(R.layout.activity_main);
         mTextView = (TextView) findViewById(R.id.textView);
+        weatherTextView = (TextView) findViewById(R.id.textView2);
+        aqiTextView = (TextView) findViewById(R.id.textView3);
+        forecastTextView = (TextView) findViewById(R.id.textView4);
+        forecastTextView.setMovementMethod(new ScrollingMovementMethod());
+        client = LocationServices.getFusedLocationProviderClient(this);
         sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
         list = sensorManager.getSensorList(Sensor.TYPE_ACCELEROMETER);
         buttonStart = (Button) findViewById(R.id.buttonStart);
         buttonStop = (Button) findViewById(R.id.buttonStop);
-
+        androidId = Settings.Secure.getString(getContentResolver(),
+                Settings.Secure.ANDROID_ID);
         /**
          * This callback will be invoked when a start button is dispatched.
          */
@@ -119,6 +144,10 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         });
     }
 
+    private void requestPermission() {
+        ActivityCompat.requestPermissions(this, new String[]{ACCESS_FINE_LOCATION}, 1);
+    }
+
     /**
      * Called when there is a new sensor event.
      *
@@ -130,24 +159,48 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     public void onSensorChanged(SensorEvent event) {
         if (isRunning) {
             try {
-                long currTime = System.currentTimeMillis();
-                long epochTimeStamp = System.currentTimeMillis() + ((event.timestamp - SystemClock.elapsedRealtimeNanos()) / 1000000L);
-                float xvalue = event.values[0];
-                float yvalue = event.values[1];
-                float zvalue = event.values[2];
-                DataStorageClass storeData = new DataStorageClass(epochTimeStamp, xvalue, yvalue, zvalue);
-                mTextView.setText("x: " + xvalue + "\ny: " + yvalue + "\nz: " + zvalue);
-                if (currTime - lastAccCheck > ACC_CHECK_INTERVAL) {
-                    sensorRef.child(String.valueOf(epochTimeStamp)).setValue(storeData);
-                    lastAccCheck = currTime;
+                if (ActivityCompat.checkSelfPermission(MainActivity.this, ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                    Log.d("sensor", "permission issue");
+                    requestPermission();
                 }
+
+                client.getLastLocation().addOnSuccessListener(MainActivity.this, new OnSuccessListener<Location>() {
+                    @RequiresApi(api = Build.VERSION_CODES.O)
+                    @Override
+                    public void onSuccess(Location o) {
+                        double latitude = o.getLatitude();
+                        double longitude = o.getLongitude();
+                        long currTime = System.currentTimeMillis();
+                        long epochTimeStamp = System.currentTimeMillis() + ((event.timestamp - SystemClock.elapsedRealtimeNanos()) / 1000000L);
+                        nodeRef = String.format("%s%s", Math.abs(latitude), Math.abs(longitude)).replace(".", "");
+                        mTextView.setText("Latitude: " + latitude + "\nLongitude: " + longitude);
+                        GpsStorageClass storeData = new GpsStorageClass(epochTimeStamp, longitude, latitude, androidId);
+                        if (currTime - lastAccCheck > ACC_CHECK_INTERVAL) {
+                            DatabaseReference gpsNodeRef = sensorRef.child(nodeRef);
+                            gpsNodeRef.child(String.valueOf(epochTimeStamp)).setValue(storeData);
+                            lastAccCheck = currTime;
+                            apiFlag = true;
+                        }
+                        DateFormatForecastWrapper forecastRange = utils.formatTimeDate((long) (epochTimeStamp / Math.pow(10, 3)));
+                        geoForecastURL = String.format(FORECAST_URL, latitude, longitude, forecastRange.currentTimeStamp, forecastRange.ForecastTimeStamp);
+                        geoWeatherURL = String.format(WEATHER_URL, latitude, longitude, weather_token);
+                        geoAQIURL = String.format(AQ_URL, latitude, longitude, aqi_token);
+                    }
+                });
             } catch (Exception e) {
                 Log.d("sensorData", "Exemption raised while writing to a firebase.");
                 e.printStackTrace();
             }
-            new FetchOpenDataTask().execute(URL);
+
+            if (apiFlag) {
+                new FetchOpenDataTask().execute(geoWeatherURL, "weather");
+                new FetchOpenDataTask().execute(geoAQIURL, "aqi");
+                new FetchOpenDataTask().execute(geoForecastURL, "forecast");
+                apiFlag = false;
+            }
         }
     }
+
 
     @Override
     public void onAccuracyChanged(Sensor sensor, int accuracy) {
@@ -156,25 +209,34 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     /**
      * Class to fetch data from the open api and feed it to the firebase database.
      */
-    private class FetchOpenDataTask extends AsyncTask<String, Void, String> {
+    private class FetchOpenDataTask extends AsyncTask<String, Void, GetWrapper> {
 
         @Override
-        protected String doInBackground(String... params) {
+        protected GetWrapper doInBackground(String... params) {
             HttpURLConnection connection = null;
             BufferedReader reader = null;
-            InputStream inputStream = null;
+            InputStream inputStream;
+            GetWrapper wrapper = new GetWrapper();
             try {
+                if (params[0] == null) {
+                    return null;
+                }
+                Log.d("sensor", "tsting url");
+                Log.d("sensor", androidId);
+                Log.d("sensor", params[0]);
                 URL url = new URL(params[0]);
                 connection = (HttpURLConnection) url.openConnection();
                 connection.connect();
                 inputStream = connection.getInputStream();
                 reader = new BufferedReader(new InputStreamReader(inputStream));
                 StringBuilder buffer = new StringBuilder();
-                String line = "";
+                String line;
                 while ((line = reader.readLine()) != null) {
                     buffer.append(line).append("\n");
                 }
-                return buffer.toString();
+                wrapper.response_data = buffer.toString();
+                wrapper.api_info = params[1];
+                return wrapper;
             } catch (IOException e) {
                 e.printStackTrace();
             } finally {
@@ -192,86 +254,85 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             return null;
         }
 
+        @RequiresApi(api = Build.VERSION_CODES.O)
         @Override
-        protected void onPostExecute(String dataFetched) {
-            //parse the JSON data and then display
-            parseJSON(dataFetched);
+        protected void onPostExecute(GetWrapper dataFetched) {
+            //parse the JSON/XML data and then display
+            if (dataFetched == null) {
+                return;
+            }
+            if (dataFetched.api_info.equals("weather")) parseWeatherJSON(dataFetched.response_data);
+            if (dataFetched.api_info.equals("aqi")) parseAQIJSON(dataFetched.response_data);
+            if (dataFetched.api_info.equals("forecast")) {
+                String forecastData = utils.parseForecastXML(dataFetched.response_data, forecastDataRef, nodeRef, androidId);
+                forecastTextView.setText(forecastData);
+            }
+
         }
 
         /**
-         * parse json data fetched from the api and push the parsed data to firebase
+         * parse json data fetched from the weather api and push the parsed data to firebase
          *
          * @param data - metadata from the api
          */
-        private void parseJSON(String data) {
+        @RequiresApi(api = Build.VERSION_CODES.O)
+        private void parseWeatherJSON(String data) {
             try {
+                String weatherInfo = " Last updated %s\n cloud description %s\n temperature %s\u2103\n feels like %s\u2103\n min temperature %s\u2103\n max " +
+                        "temperature %s\u2103\n wind speed %sm/s\n sunrise time %s\n sunset time %s\n";
                 JSONObject jsonObject = new JSONObject(data);
-                JSONObject getTimestamp = jsonObject.getJSONArray("items").getJSONObject(0);
-                long time_stamp = getEpoch(getTimestamp.getString("timestamp"));
-                if (time_stamp > timestamp) {
-                    JSONObject stations = jsonObject.getJSONObject("metadata");
-                    JSONArray stationArray = stations.getJSONArray("stations");
-                    JSONArray readingArray = getTimestamp.getJSONArray("readings");
-                    Map<String, Float> readingMap = getReadings(readingArray);
-
-                    for (int i = 0; i < stationArray.length(); i++) {
-                        JSONObject sensorData = stationArray.getJSONObject(i);
-                        String deviceId = sensorData.getString("device_id");
-                        String name = sensorData.getString("name");
-                        JSONObject location = sensorData.getJSONObject("location");
-                        float latitude = (float) location.getDouble("latitude");
-                        float longitude = (float) location.getDouble("longitude");
-                        float reading = readingMap.get(deviceId);
-                        ApiDataStorageClass apiData = new ApiDataStorageClass(time_stamp, deviceId, name, latitude, longitude, reading);
-                        DatabaseReference areaRef = openDataRef.child(name);
-                        areaRef.child(String.valueOf(time_stamp)).setValue(apiData);
-                        timestamp = time_stamp;
-                    }
-                }
+                JSONObject getTemperature = jsonObject.getJSONObject("main");
+                float latitude = (float) jsonObject.getJSONObject("coord").getDouble("lat");
+                float longitude = (float) jsonObject.getJSONObject("coord").getDouble("lon");
+                float temperature = (float) getTemperature.getDouble("temp");
+                float feel_like_temperature = (float) getTemperature.getDouble("feels_like");
+                float min_temperature = (float) getTemperature.getDouble("temp_min");
+                float max_temperature = (float) getTemperature.getDouble("temp_max");
+                float wind_speed = (float) jsonObject.getJSONObject("wind").getDouble("speed");
+                String sunrise = utils.epochToDate(jsonObject.getJSONObject("sys").getLong("sunrise"));
+                String sunset = utils.epochToDate(jsonObject.getJSONObject("sys").getLong("sunset"));
+                long time_stamp = jsonObject.getLong("dt");
+                DateFormatForecastWrapper tet = utils.formatTimeDate(time_stamp);
+                String formatted_ts = utils.epochToDate(time_stamp);
+                String cloud_des = jsonObject.getJSONArray("weather").getJSONObject(0).getString("description");
+                WeatherDataStorageClass weatherMetadata = new WeatherDataStorageClass(latitude, longitude, temperature, feel_like_temperature, min_temperature, max_temperature, wind_speed, sunrise, sunset, cloud_des, formatted_ts, androidId, time_stamp);
+                String weatherman = String.format(weatherInfo, formatted_ts, cloud_des, temperature, feel_like_temperature, min_temperature, max_temperature, wind_speed, sunrise, sunset);
+                Log.d("sensor", weatherman);
+                weatherTextView.setText(weatherman);
+                DatabaseReference nodeDataRef = openDataRef.child(nodeRef);
+                nodeDataRef.child(String.valueOf(time_stamp)).setValue(weatherMetadata);
             } catch (JSONException e) {
                 e.printStackTrace();
             }
         }
 
         /**
-         * Get air temperature readings for each sensor device.
+         * parse json data fetched from the air quality api and push the parsed data to firebase
          *
-         * @param readingArray - JsonArray data for air temperature of each sensors.
-         * @return - Map of each readings of a sensors.
+         * @param data - metadata from the api
          */
-        private Map<String, Float> getReadings(JSONArray readingArray) {
-            Map<String, Float> readingMap = new HashMap<String, Float>();
-
+        @RequiresApi(api = Build.VERSION_CODES.O)
+        private void parseAQIJSON(String data) {
             try {
-                for (int j = 0; j < readingArray.length(); j++) {
-                    JSONObject readingData = readingArray.getJSONObject(j);
-                    Log.d("SensorData", String.valueOf(readingData));
-                    String station_id = readingData.getString("station_id");
-                    float reading = (float) readingData.getDouble("value");
-                    readingMap.put(station_id, reading);
-                }
+                String aqiText = " AQI %s\n last updated %s\n";
+                Log.d("sensor", data);
+                JSONObject jsonObject = new JSONObject(data);
+                JSONObject jsonData = jsonObject.getJSONObject("data");
+                int aqi = jsonData.getInt("aqi");
+                JSONArray coordinate = jsonData.getJSONObject("city").getJSONArray("geo");
+                float latitude = (float) coordinate.getDouble(0);
+                float longitude = (float) coordinate.getDouble(1);
+                long last_updated = jsonObject.getJSONObject("data").getJSONObject("time").getLong("v");
+                String aqiInfo = String.format(aqiText, aqi, utils.epochToDate(last_updated));
+                Log.d("sensor", aqiInfo);
+                aqiTextView.setText(aqiInfo);
+                AQIDataStorageClass aqiMetadata = new AQIDataStorageClass(aqi, last_updated, latitude, longitude, androidId);
+                DatabaseReference nodeDataRef = aqiDataRef.child(nodeRef);
+                nodeDataRef.child(String.valueOf(last_updated)).setValue(aqiMetadata);
+                System.out.println(last_updated + "" + latitude + "" + longitude);
             } catch (JSONException e) {
                 e.printStackTrace();
             }
-            return readingMap;
-        }
-
-        /**
-         * Convert datetime format to epoch time
-         *
-         * @param timestamp - Date - 2021-11-04T09:10:00+08:00
-         * @return converted epoch time
-         */
-        private long getEpoch(String timestamp) {
-            long epoch = 0;
-            SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZZZZZ");
-            try {
-                Date date = df.parse(timestamp);
-                epoch = date.getTime();
-            } catch (Exception e) {
-                Log.d("sensorData", String.valueOf(e));
-            }
-            return epoch;
         }
     }
 }
