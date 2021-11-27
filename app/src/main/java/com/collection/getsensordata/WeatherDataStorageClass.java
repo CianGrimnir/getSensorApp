@@ -2,13 +2,14 @@ package com.collection.getsensordata;
 
 public class WeatherDataStorageClass {
     float latitude, longitude, temperature, feel_like_temperature, min_temperature, max_temperature, wind_speed;
-    String sunrise, sunset, cloud_description, formatted_timeStamp;
+    String sunrise, sunset, cloud_description, formatted_timeStamp, user;
     Long time_stamp;
 
+    // To avoid error for firebase - create empty constructor.
     public WeatherDataStorageClass() {
     }
 
-    public WeatherDataStorageClass(float latitude, float longitude, float temperature, float feel_like_temperature, float min_temperature, float max_temperature, float wind_speed, String sunrise, String sunset, String cloud_description, String formatted_timeStamp, Long time_stamp) {
+    public WeatherDataStorageClass(float latitude, float longitude, float temperature, float feel_like_temperature, float min_temperature, float max_temperature, float wind_speed, String sunrise, String sunset, String cloud_description, String formatted_timeStamp, String androidId, Long time_stamp) {
         this.latitude = latitude;
         this.longitude = longitude;
         this.temperature = temperature;
@@ -20,6 +21,7 @@ public class WeatherDataStorageClass {
         this.sunset = sunset;
         this.cloud_description = cloud_description;
         this.formatted_timeStamp = formatted_timeStamp;
+        this.user = androidId;
         this.time_stamp = time_stamp;
     }
 
@@ -109,6 +111,14 @@ public class WeatherDataStorageClass {
 
     public void setFormatted_timeStamp(String formatted_timeStamp) {
         this.formatted_timeStamp = formatted_timeStamp;
+    }
+
+    public String getUser() {
+        return user;
+    }
+
+    public void setUser(String user) {
+        this.user = user;
     }
 
     public Long getTime_stamp() {

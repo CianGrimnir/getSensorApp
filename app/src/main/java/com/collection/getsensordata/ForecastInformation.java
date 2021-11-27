@@ -1,10 +1,11 @@
 package com.collection.getsensordata;
 
 public class ForecastInformation {
-    String formattedDate;
+    String formattedDate, user;
     Long epochTime;
     float temperature, wind_speed, humidity, latitude, longitude;
 
+    // To avoid error for firebase - create empty constructor.
     public ForecastInformation() {
     }
 
@@ -62,5 +63,13 @@ public class ForecastInformation {
 
     public void setLongitude(float longitude) {
         this.longitude = longitude;
+    }
+
+    public String getUser() {
+        return user;
+    }
+
+    public void setUser(String user) {
+        this.user = user;
     }
 }

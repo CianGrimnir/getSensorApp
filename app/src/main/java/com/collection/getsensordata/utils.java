@@ -32,8 +32,12 @@ import javax.xml.parsers.ParserConfigurationException;
 
 public class utils {
 
-    public ForecastInformation forecast = new ForecastInformation();
-
+    /**
+     * Rounding of and formatting the epoch time to nearest hour-hand.
+     *
+     * @param epochTime - epoch time
+     * @return object with current and forecasted timestamp
+     */
     @RequiresApi(api = Build.VERSION_CODES.O)
     public static DateFormatForecastWrapper formatTimeDate(Long epochTime) {
         DateFormatForecastWrapper forecastRange = new DateFormatForecastWrapper();
@@ -54,13 +58,20 @@ public class utils {
     }
 
     /**
-     * parse json data fetched from the air quality api and push the parsed data to firebase
+     * parse json data fetched from the forecast api and push the parsed data to firebase
      *
-     * @param data - metadata from the api
+     * @param data          - metadata from the api
+     * @param forecastRef   - firebase reference
+     * @param nodeReference - key value used for firebase reference
+     * @param androidID     - unique user id
+     * @return - processed metadata
      */
     @RequiresApi(api = Build.VERSION_CODES.O)
-    public static void parseForecastXML(String data, DatabaseReference forecastRef) {
+    public static String parseForecastXML(String data, DatabaseReference forecastRef, String nodeReference, String androidID) {
+        String template = "\n Time %s\n temperature %s\u2103\n wind speed %sm/s\n humidity %s%%\n";
+        StringBuilder forecastInfo = new StringBuilder(" Forecast information\n");
         ForecastInformation forecast = new ForecastInformation();
+        forecast.user = androidID;
         Document doc = null;
         try {
             DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
@@ -89,20 +100,45 @@ public class utils {
                 ForecastInformation forecastDate = formattingForecastDate(forecast_end);
                 forecast.formattedDate = forecastDate.formattedDate;
                 forecast.epochTime = forecastDate.epochTime;
-                forecastRef.child(String.valueOf(forecast.epochTime)).setValue(forecast);
+
+                DatabaseReference nodeDataRef = forecastRef.child(nodeReference);
+                nodeDataRef.child(String.valueOf(forecast.epochTime)).setValue(forecast);
+                if (datapoint.getLength() > 0)
+                    forecastInfo.append(String.format(template, forecast.formattedDate, forecast.temperature, forecast.wind_speed, forecast.humidity));
+
             }
             System.out.println("forecasting" + forecast.formattedDate);
         }
+        return forecastInfo.toString();
     }
 
+    /**
+     * Convert datetime format fetched from forecast to epoch and readable time format
+     *
+     * @param date - epoch time
+     * @return object with formatted timestamp and epoch time
+     */
     @RequiresApi(api = Build.VERSION_CODES.O)
     static ForecastInformation formattingForecastDate(String date) {
         ForecastInformation forecast = new ForecastInformation();
         Long epoch = (long) (Instant.parse(date).toEpochMilli() / Math.pow(10, 3));
         LocalDateTime dateTime = LocalDateTime.ofEpochSecond(epoch, 0, ZoneOffset.UTC);
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("EEEE,MMMM d,yyyy h:mm a", Locale.ENGLISH);
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("MMMM d,yyyy h:mm a", Locale.ENGLISH);
         forecast.formattedDate = dateTime.format(formatter);
         forecast.epochTime = epoch;
         return forecast;
+    }
+
+    /**
+     * Convert datetime format to epoch time
+     *
+     * @param epochTime - timestamp in epoch format
+     * @return formatted to human readable time
+     */
+    @RequiresApi(api = Build.VERSION_CODES.O)
+    static String epochToDate(Long epochTime) {
+        LocalDateTime dateTime = LocalDateTime.ofEpochSecond(epochTime, 0, ZoneOffset.UTC);
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("MMMM d,yyyy h:mm a", Locale.ENGLISH);
+        return dateTime.format(formatter);
     }
 }

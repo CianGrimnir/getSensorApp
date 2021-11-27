@@ -8,7 +8,6 @@ import androidx.core.app.ActivityCompat;
 
 import android.content.pm.PackageManager;
 import android.location.Location;
-import android.location.LocationManager;
 import android.os.AsyncTask;
 import android.os.Build;
 import android.annotation.SuppressLint;
@@ -19,6 +18,8 @@ import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.os.Bundle;
 import android.os.SystemClock;
+import android.provider.Settings;
+import android.text.method.ScrollingMovementMethod;
 import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
@@ -43,12 +44,9 @@ import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
-import java.util.Calendar;
 import java.util.Date;
-import java.util.GregorianCalendar;
 import java.util.List;
 import java.text.SimpleDateFormat;
 import java.util.Locale;
@@ -61,6 +59,9 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     Button buttonStop;
     boolean isRunning;
     private TextView mTextView;
+    private TextView weatherTextView;
+    private TextView aqiTextView;
+    private TextView forecastTextView;
     private List list;
     private final static long ACC_CHECK_INTERVAL = 100000;
     private long lastAccCheck, weather_last_updated, aqi_last_updated;
@@ -78,6 +79,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     DatabaseReference openDataRef = rootRef.child("weather_data");
     DatabaseReference aqiDataRef = rootRef.child("aqi_data");
     DatabaseReference forecastDataRef = rootRef.child("forecast_data");
+    String nodeRef, androidId = "";
 
 
     /**
@@ -96,13 +98,17 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         requestPermission();
         setContentView(R.layout.activity_main);
         mTextView = (TextView) findViewById(R.id.textView);
+        weatherTextView = (TextView) findViewById(R.id.textView2);
+        aqiTextView = (TextView) findViewById(R.id.textView3);
+        forecastTextView = (TextView) findViewById(R.id.textView4);
+        forecastTextView.setMovementMethod(new ScrollingMovementMethod());
         client = LocationServices.getFusedLocationProviderClient(this);
         sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
         list = sensorManager.getSensorList(Sensor.TYPE_ACCELEROMETER);
         buttonStart = (Button) findViewById(R.id.buttonStart);
         buttonStop = (Button) findViewById(R.id.buttonStop);
-
-
+        androidId = Settings.Secure.getString(getContentResolver(),
+                Settings.Secure.ANDROID_ID);
         /**
          * This callback will be invoked when a start button is dispatched.
          */
@@ -166,10 +172,12 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                         double longitude = o.getLongitude();
                         long currTime = System.currentTimeMillis();
                         long epochTimeStamp = System.currentTimeMillis() + ((event.timestamp - SystemClock.elapsedRealtimeNanos()) / 1000000L);
+                        nodeRef = String.format("%s%s", Math.abs(latitude), Math.abs(longitude)).replace(".", "");
                         mTextView.setText("Latitude: " + latitude + "\nLongitude: " + longitude);
-                        DataStorageClass storeData = new DataStorageClass(epochTimeStamp, longitude, latitude);
+                        GpsStorageClass storeData = new GpsStorageClass(epochTimeStamp, longitude, latitude, androidId);
                         if (currTime - lastAccCheck > ACC_CHECK_INTERVAL) {
-                            sensorRef.child(String.valueOf(epochTimeStamp)).setValue(storeData);
+                            DatabaseReference gpsNodeRef = sensorRef.child(nodeRef);
+                            gpsNodeRef.child(String.valueOf(epochTimeStamp)).setValue(storeData);
                             lastAccCheck = currTime;
                             apiFlag = true;
                         }
@@ -185,9 +193,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             }
 
             if (apiFlag) {
-
-                // new FetchOpenDataTask().execute(geoWeatherURL, "weather");
-                // new FetchOpenDataTask().execute(geoAQIURL, "aqi");
+                new FetchOpenDataTask().execute(geoWeatherURL, "weather");
+                new FetchOpenDataTask().execute(geoAQIURL, "aqi");
                 new FetchOpenDataTask().execute(geoForecastURL, "forecast");
                 apiFlag = false;
             }
@@ -208,13 +215,14 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         protected GetWrapper doInBackground(String... params) {
             HttpURLConnection connection = null;
             BufferedReader reader = null;
-            InputStream inputStream = null;
+            InputStream inputStream;
             GetWrapper wrapper = new GetWrapper();
             try {
                 if (params[0] == null) {
                     return null;
                 }
                 Log.d("sensor", "tsting url");
+                Log.d("sensor", androidId);
                 Log.d("sensor", params[0]);
                 URL url = new URL(params[0]);
                 connection = (HttpURLConnection) url.openConnection();
@@ -222,7 +230,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 inputStream = connection.getInputStream();
                 reader = new BufferedReader(new InputStreamReader(inputStream));
                 StringBuilder buffer = new StringBuilder();
-                String line = "";
+                String line;
                 while ((line = reader.readLine()) != null) {
                     buffer.append(line).append("\n");
                 }
@@ -255,8 +263,11 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             }
             if (dataFetched.api_info.equals("weather")) parseWeatherJSON(dataFetched.response_data);
             if (dataFetched.api_info.equals("aqi")) parseAQIJSON(dataFetched.response_data);
-            if (dataFetched.api_info.equals("forecast"))
-                utils.parseForecastXML(dataFetched.response_data, forecastDataRef);
+            if (dataFetched.api_info.equals("forecast")) {
+                String forecastData = utils.parseForecastXML(dataFetched.response_data, forecastDataRef, nodeRef, androidId);
+                forecastTextView.setText(forecastData);
+            }
+
         }
 
         /**
@@ -278,16 +289,18 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 float min_temperature = (float) getTemperature.getDouble("temp_min");
                 float max_temperature = (float) getTemperature.getDouble("temp_max");
                 float wind_speed = (float) jsonObject.getJSONObject("wind").getDouble("speed");
-                String sunrise = epochToDate(jsonObject.getJSONObject("sys").getLong("sunrise"));
-                String sunset = epochToDate(jsonObject.getJSONObject("sys").getLong("sunset"));
+                String sunrise = utils.epochToDate(jsonObject.getJSONObject("sys").getLong("sunrise"));
+                String sunset = utils.epochToDate(jsonObject.getJSONObject("sys").getLong("sunset"));
                 long time_stamp = jsonObject.getLong("dt");
                 DateFormatForecastWrapper tet = utils.formatTimeDate(time_stamp);
-                String formatted_ts = epochToDate(time_stamp);
+                String formatted_ts = utils.epochToDate(time_stamp);
                 String cloud_des = jsonObject.getJSONArray("weather").getJSONObject(0).getString("description");
-                WeatherDataStorageClass weatherMetadata = new WeatherDataStorageClass(latitude, longitude, temperature, feel_like_temperature, min_temperature, max_temperature, wind_speed, sunrise, sunset, cloud_des, formatted_ts, time_stamp);
+                WeatherDataStorageClass weatherMetadata = new WeatherDataStorageClass(latitude, longitude, temperature, feel_like_temperature, min_temperature, max_temperature, wind_speed, sunrise, sunset, cloud_des, formatted_ts, androidId, time_stamp);
                 String weatherman = String.format(weatherInfo, formatted_ts, cloud_des, temperature, feel_like_temperature, min_temperature, max_temperature, wind_speed, sunrise, sunset);
                 Log.d("sensor", weatherman);
-                openDataRef.child(String.valueOf(time_stamp)).setValue(weatherMetadata);
+                weatherTextView.setText(weatherman);
+                DatabaseReference nodeDataRef = openDataRef.child(nodeRef);
+                nodeDataRef.child(String.valueOf(time_stamp)).setValue(weatherMetadata);
             } catch (JSONException e) {
                 e.printStackTrace();
             }
@@ -298,8 +311,10 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
          *
          * @param data - metadata from the api
          */
+        @RequiresApi(api = Build.VERSION_CODES.O)
         private void parseAQIJSON(String data) {
             try {
+                String aqiText = " AQI %s\n last updated %s\n";
                 Log.d("sensor", data);
                 JSONObject jsonObject = new JSONObject(data);
                 JSONObject jsonData = jsonObject.getJSONObject("data");
@@ -308,36 +323,16 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 float latitude = (float) coordinate.getDouble(0);
                 float longitude = (float) coordinate.getDouble(1);
                 long last_updated = jsonObject.getJSONObject("data").getJSONObject("time").getLong("v");
-                AQIDataStorageClass aqiMetadata = new AQIDataStorageClass(aqi, last_updated, latitude, longitude);
-                aqiDataRef.child(String.valueOf(last_updated)).setValue(aqiMetadata);
+                String aqiInfo = String.format(aqiText, aqi, utils.epochToDate(last_updated));
+                Log.d("sensor", aqiInfo);
+                aqiTextView.setText(aqiInfo);
+                AQIDataStorageClass aqiMetadata = new AQIDataStorageClass(aqi, last_updated, latitude, longitude, androidId);
+                DatabaseReference nodeDataRef = aqiDataRef.child(nodeRef);
+                nodeDataRef.child(String.valueOf(last_updated)).setValue(aqiMetadata);
+                System.out.println(last_updated + "" + latitude + "" + longitude);
             } catch (JSONException e) {
                 e.printStackTrace();
             }
-        }
-
-        /**
-         * Convert datetime format to epoch time
-         *
-         * @param timestamp - Date - 2021-11-04T09:10:00+08:00
-         * @return converted epoch time
-         */
-        private long getEpoch(String timestamp) {
-            long epoch = 0;
-            SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZZZZZ");
-            try {
-                Date date = df.parse(timestamp);
-                epoch = date.getTime();
-            } catch (Exception e) {
-                Log.d("sensorData", String.valueOf(e));
-            }
-            return epoch;
-        }
-
-        @RequiresApi(api = Build.VERSION_CODES.O)
-        private String epochToDate(Long epochTime) {
-            LocalDateTime dateTime = LocalDateTime.ofEpochSecond(epochTime, 0, ZoneOffset.UTC);
-            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("EEEE,MMMM d,yyyy h:mm a", Locale.ENGLISH);
-            return dateTime.format(formatter);
         }
     }
 }

@@ -4,15 +4,18 @@ public class AQIDataStorageClass {
     int aqi;
     Long time_stamp;
     float latitude, longitude;
+    String user;
 
+    // To avoid error for firebase - create empty constructor.
     public AQIDataStorageClass() {
     }
 
-    public AQIDataStorageClass(int aqi, Long time_stamp, float latitude, float longitude) {
+    public AQIDataStorageClass(int aqi, Long time_stamp, float latitude, float longitude, String androidId) {
         this.aqi = aqi;
         this.time_stamp = time_stamp;
         this.latitude = latitude;
         this.longitude = longitude;
+        this.user = androidId;
     }
 
     public int getAqi() {
@@ -45,5 +48,13 @@ public class AQIDataStorageClass {
 
     public void setLongitude(float longitude) {
         this.longitude = longitude;
+    }
+
+    public String getUser() {
+        return user;
+    }
+
+    public void setUser(String user) {
+        this.user = user;
     }
 }
