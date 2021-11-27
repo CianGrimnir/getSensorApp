@@ -176,7 +176,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                         mTextView.setText("Latitude: " + latitude + "\nLongitude: " + longitude);
                         GpsStorageClass storeData = new GpsStorageClass(epochTimeStamp, longitude, latitude, androidId);
                         if (currTime - lastAccCheck > ACC_CHECK_INTERVAL) {
-                            DatabaseReference gpsNodeRef = sensorRef.child(nodeRef);
+                            DatabaseReference gpsNodeRef = sensorRef.child(androidId).child(nodeRef);
                             gpsNodeRef.child(String.valueOf(epochTimeStamp)).setValue(storeData);
                             lastAccCheck = currTime;
                             apiFlag = true;
@@ -221,9 +221,6 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 if (params[0] == null) {
                     return null;
                 }
-                Log.d("sensor", "tsting url");
-                Log.d("sensor", androidId);
-                Log.d("sensor", params[0]);
                 URL url = new URL(params[0]);
                 connection = (HttpURLConnection) url.openConnection();
                 connection.connect();
@@ -278,7 +275,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         @RequiresApi(api = Build.VERSION_CODES.O)
         private void parseWeatherJSON(String data) {
             try {
-                String weatherInfo = " Last updated %s\n cloud description %s\n temperature %s\u2103\n feels like %s\u2103\n min temperature %s\u2103\n max " +
+                String weatherInfo = " Last updated %s\n cloud description %s\n temperature %s\u2103\t\t feels like %s\u2103\n min temperature %s\u2103\n max " +
                         "temperature %s\u2103\n wind speed %sm/s\n sunrise time %s\n sunset time %s\n";
                 JSONObject jsonObject = new JSONObject(data);
                 JSONObject getTemperature = jsonObject.getJSONObject("main");
@@ -297,9 +294,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 String cloud_des = jsonObject.getJSONArray("weather").getJSONObject(0).getString("description");
                 WeatherDataStorageClass weatherMetadata = new WeatherDataStorageClass(latitude, longitude, temperature, feel_like_temperature, min_temperature, max_temperature, wind_speed, sunrise, sunset, cloud_des, formatted_ts, androidId, time_stamp);
                 String weatherman = String.format(weatherInfo, formatted_ts, cloud_des, temperature, feel_like_temperature, min_temperature, max_temperature, wind_speed, sunrise, sunset);
-                Log.d("sensor", weatherman);
                 weatherTextView.setText(weatherman);
-                DatabaseReference nodeDataRef = openDataRef.child(nodeRef);
+                DatabaseReference nodeDataRef = openDataRef.child(androidId).child(nodeRef);
                 nodeDataRef.child(String.valueOf(time_stamp)).setValue(weatherMetadata);
             } catch (JSONException e) {
                 e.printStackTrace();
@@ -315,7 +311,6 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         private void parseAQIJSON(String data) {
             try {
                 String aqiText = " AQI %s\n last updated %s\n";
-                Log.d("sensor", data);
                 JSONObject jsonObject = new JSONObject(data);
                 JSONObject jsonData = jsonObject.getJSONObject("data");
                 int aqi = jsonData.getInt("aqi");
@@ -324,12 +319,10 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 float longitude = (float) coordinate.getDouble(1);
                 long last_updated = jsonObject.getJSONObject("data").getJSONObject("time").getLong("v");
                 String aqiInfo = String.format(aqiText, aqi, utils.epochToDate(last_updated));
-                Log.d("sensor", aqiInfo);
                 aqiTextView.setText(aqiInfo);
                 AQIDataStorageClass aqiMetadata = new AQIDataStorageClass(aqi, last_updated, latitude, longitude, androidId);
-                DatabaseReference nodeDataRef = aqiDataRef.child(nodeRef);
+                DatabaseReference nodeDataRef = aqiDataRef.child(androidId).child(nodeRef);
                 nodeDataRef.child(String.valueOf(last_updated)).setValue(aqiMetadata);
-                System.out.println(last_updated + "" + latitude + "" + longitude);
             } catch (JSONException e) {
                 e.printStackTrace();
             }
