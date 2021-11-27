@@ -68,7 +68,7 @@ public class utils {
      */
     @RequiresApi(api = Build.VERSION_CODES.O)
     public static String parseForecastXML(String data, DatabaseReference forecastRef, String nodeReference, String androidID) {
-        String template = "\n Time %s\n temperature %s\u2103\n wind speed %sm/s\n humidity %s%%\n";
+        String template = "\n Time %s\n temperature %s\u2103\t wind speed %sm/s\t humidity %s%%\n";
         StringBuilder forecastInfo = new StringBuilder(" Forecast information\n");
         ForecastInformation forecast = new ForecastInformation();
         forecast.user = androidID;
@@ -101,13 +101,12 @@ public class utils {
                 forecast.formattedDate = forecastDate.formattedDate;
                 forecast.epochTime = forecastDate.epochTime;
 
-                DatabaseReference nodeDataRef = forecastRef.child(nodeReference);
+                DatabaseReference nodeDataRef = forecastRef.child(androidID).child(nodeReference);
                 nodeDataRef.child(String.valueOf(forecast.epochTime)).setValue(forecast);
                 if (datapoint.getLength() > 0)
                     forecastInfo.append(String.format(template, forecast.formattedDate, forecast.temperature, forecast.wind_speed, forecast.humidity));
 
             }
-            System.out.println("forecasting" + forecast.formattedDate);
         }
         return forecastInfo.toString();
     }
