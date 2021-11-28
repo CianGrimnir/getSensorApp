@@ -1,0 +1,5 @@
+folium
+webbrowser
+firebase_admin
+matplotlib
+pandas
