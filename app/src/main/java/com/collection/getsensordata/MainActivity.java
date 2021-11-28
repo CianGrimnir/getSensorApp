@@ -43,13 +43,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
-import java.time.format.DateTimeFormatter;
-import java.util.Date;
 import java.util.List;
-import java.text.SimpleDateFormat;
-import java.util.Locale;
 
 
 public class MainActivity extends AppCompatActivity implements SensorEventListener {
@@ -64,7 +58,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private TextView forecastTextView;
     private List list;
     private final static long ACC_CHECK_INTERVAL = 100000;
-    private long lastAccCheck, weather_last_updated, aqi_last_updated;
+    private long lastAccCheck;
     private FusedLocationProviderClient client;
     boolean apiFlag = true;
     private String geoWeatherURL, geoAQIURL, geoForecastURL, weatherInfo, aqiInfo;
